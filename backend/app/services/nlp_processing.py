@@ -16,12 +16,25 @@ nlp = pipeline("ner", model="samrawal/bert-base-uncased_clinical-ner", grouped_e
 
 def extract_symptoms(text: str):
     """
-    Extracts named entities (symptoms/conditions) from patient input.
+    Extracts medical-related entities (symptoms/conditions) from patient input.
+    Cleans up sub-tokens like 'short' + '##ness of breath' → 'shortness of breath'.
     """
     entities = nlp(text)
-    extracted = [entity["word"].lower() for entity in entities]
 
-    if not extracted:
-        extracted = ["general symptom"]
+    merged = []
+    current = ""
+    for e in entities:
+        word = e["word"].replace("##", "")
+        if current and not e["word"].startswith("##"):
+            merged.append(current.strip())
+            current = word
+        else:
+            current += word if not e["word"].startswith("##") else word
+    if current:
+        merged.append(current.strip())
 
-    return extracted
+    if not merged:
+        merged = ["general symptom"]
+
+    return merged
+
