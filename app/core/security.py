@@ -1,0 +1,27 @@
+import os
+from datetime import datetime, timedelta
+from typing import Optional
+
+from passlib.context import CryptContext
+from jose import jwt, JWTError
+
+SECRET_KEY = os.getenv("JWT_SECRET", "dev-secret-change-me")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 12  # 12 hours
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def get_password_hash(password: str) -> str:
+    return pwd_context.hash(password)
+
+def verify_password(plain_password: str, hashed: str) -> bool:
+    return pwd_context.verify(plain_password, hashed)
+
+def create_access_token(subject: str, role: str, expires_delta: Optional[timedelta] = None) -> str:
+    to_encode = {"sub": subject, "role": role, "iat": int(datetime.utcnow().timestamp())}
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def decode_token(token: str) -> dict:
+    return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
