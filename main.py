@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
-
+from app.routes import triage
 from app.routes import triage, patients, auth, chat
 from app.core.database import Base, engine
 
@@ -28,7 +28,7 @@ app.include_router(auth.router)
 app.include_router(triage.router)
 app.include_router(patients.router)
 app.include_router(chat.router)
-
+app.include_router(triage.router)
 
 # ✅ Add Global Bearer Auth for Swagger
 def custom_openapi():
