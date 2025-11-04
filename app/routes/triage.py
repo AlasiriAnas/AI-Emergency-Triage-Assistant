@@ -1,52 +1,34 @@
+# backend/app/routes/triage.py
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List
-from app.routes.auth import get_current_user
-from app.services.triage_service import analyze_triage_conversation
+from app.core.deps import get_current_user
+from app.services.triage_service import analyze_triage
 
 router = APIRouter(prefix="/triage", tags=["Triage"])
-
-# ----- Request & Response Models -----
 
 class TriageRequest(BaseModel):
     messages: List[str]
 
-class TriageSummary(BaseModel):
-    symptoms: List[str]
-    duration: str
-    severity: str
-    riskFactors: List[str]
-
-class TriageResponse(BaseModel):
-    summary: TriageSummary
-
-
-# ----- Endpoints -----
-
-@router.post("/summary", response_model=TriageResponse)
-async def generate_summary(payload: TriageRequest, user=Depends(get_current_user)):
-    """
-    Takes patient chat history (text messages only)
-    and returns triage classification via Groq AI.
-    """
-
+@router.post("/process")
+async def triage_process(req: TriageRequest, user = Depends(get_current_user)):
     try:
-        data = analyze_triage_conversation(payload.messages)
+        result = await analyze_triage(req.messages, user.id)
+
+        if not result.get("final"):
+            return {"continue": True}  # not done
 
         return {
+            "ticket": {
+                "number": result["ticket"],
+                "estimatedWait": result["wait_time"]
+            },
             "summary": {
-                "symptoms": data.get("symptoms", []),
-                "duration": data.get("duration", ""),
-                "severity": data.get("severity", "Low"),
-                "riskFactors": data.get("risk_factors", [])
+                "symptoms": result.get("symptoms", []),
+                "duration": result.get("duration", ""),
+                "severity": result.get("severity", ""),
+                "risk_factors": result.get("risk_factors", [])
             }
         }
-
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Triage analysis failed: {str(e)}")
-
-
-# Optional placeholder if you later add manual triage logging
-@router.get("/ping")
-async def ping_check(user=Depends(get_current_user)):
-    return {"status": "Triage API alive"}
+        raise HTTPException(status_code=500, detail=f"Triage failed: {e}")

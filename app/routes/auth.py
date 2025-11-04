@@ -49,7 +49,6 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
 
     return new_user
 
-
 @router.post("/login", response_model=TokenResponse)
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == payload.email).first()
@@ -59,7 +58,6 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
     token = create_access_token(subject=user.email, role=user.role.value)
     return TokenResponse(access_token=token)
-
 
 @router.get("/me", response_model=MeResponse)
 def me(current_user: User = Depends(get_current_user)):

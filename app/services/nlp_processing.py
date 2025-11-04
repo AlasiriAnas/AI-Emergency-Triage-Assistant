@@ -2,39 +2,59 @@
 """
 NLP Processing Service
 ----------------------
-Uses a Hugging Face model to extract medical entities (symptoms/conditions)
-from patient text input.
+Extracts medical symptoms/entities from user input.
+Uses a clinical NER model if available, otherwise falls back to general NER.
+Lazy-loads the model to avoid slow startup.
 """
 
+from typing import List
 from transformers import pipeline
 
-# Load a named entity recognition (NER) model
-# You can later replace with a medical model like "d4data/biomedical-ner-all"
-nlp = pipeline("ner", model="samrawal/bert-base-uncased_clinical-ner", grouped_entities=True)
+_ner_model = None  # Lazy-loaded model cache
 
+def load_model():
+    global _ner_model
+    if _ner_model is not None:
+        return _ner_model
 
+    try:
+        _ner_model = pipeline(
+            "ner",
+            model="samrawal/bert-base-uncased_clinical-ner",
+            grouped_entities=True
+        )
+    except Exception:
+        _ner_model = pipeline("ner", grouped_entities=True)
 
-def extract_symptoms(text: str):
-    """
-    Extracts medical-related entities (symptoms/conditions) from patient input.
-    Cleans up sub-tokens like 'short' + '##ness of breath' → 'shortness of breath'.
-    """
+    return _ner_model
+
+def extract_symptoms(text: str) -> List[str]:
+    if not text or not text.strip():
+        return ["unknown symptom"]
+
+    nlp = load_model()
     entities = nlp(text)
 
     merged = []
-    current = ""
-    for e in entities:
-        word = e["word"].replace("##", "")
-        if current and not e["word"].startswith("##"):
-            merged.append(current.strip())
-            current = word
-        else:
-            current += word if not e["word"].startswith("##") else word
+    current = []
+
+    for ent in entities:
+        word = ent["word"].replace("##", "")
+        if ent.get("entity_group") and current and ent["entity_group"] != current[0][1]:
+            merged.append(" ".join(w for w, _ in current))
+            current = []
+        current.append((word, ent.get("entity_group")))
+
     if current:
-        merged.append(current.strip())
+        merged.append(" ".join(w for w, _ in current))
 
-    if not merged:
-        merged = ["general symptom"]
+    cleaned = [
+        m.strip().lower()
+        for m in merged
+        if m.strip() and len(m.strip()) > 2
+    ]
 
-    return merged
+    if not cleaned:
+        cleaned = ["general symptom"]
 
+    return cleaned

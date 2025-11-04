@@ -1,12 +1,18 @@
+# backend/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
-from app.routes import triage
-from app.routes import triage, patients, auth, chat
-from app.core.database import Base, engine
 
-# ✅ Create DB tables
+# ✅ Load DB + models BEFORE create_all()
+from app.core.database import Base, engine
+import app.models.user
+import app.models.triage_record
+
+# ✅ Now create tables
 Base.metadata.create_all(bind=engine)
+
+# ✅ Import routers AFTER loading models
+from app.routes import triage, patients, auth, chat
 
 app = FastAPI(
     title="AI-Powered Emergency Triage Assistant",
@@ -23,14 +29,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ Register routes
+# ✅ Register API routes
 app.include_router(auth.router)
 app.include_router(triage.router)
 app.include_router(patients.router)
 app.include_router(chat.router)
-app.include_router(triage.router)
 
-# ✅ Add Global Bearer Auth for Swagger
+# ✅ Custom Swagger / JWT
 def custom_openapi():
     if app.openapi_schema:
         return app.openapi_schema
@@ -42,7 +47,6 @@ def custom_openapi():
         routes=app.routes
     )
 
-    # ✅ Define JWT Bearer security scheme
     openapi_schema["components"]["securitySchemes"] = {
         "BearerAuth": {
             "type": "http",
@@ -51,18 +55,15 @@ def custom_openapi():
         }
     }
 
-    # ✅ Apply security globally (to all endpoints)
+    # Apply JWT to all routes
     for path in openapi_schema["paths"]:
         for method in openapi_schema["paths"][path]:
-            openapi_schema["paths"][path][method]["security"] = [
-                {"BearerAuth": []}
-            ]
+            openapi_schema["paths"][path][method]["security"] = [{"BearerAuth": []}]
 
     app.openapi_schema = openapi_schema
     return app.openapi_schema
 
 app.openapi = custom_openapi
-
 
 @app.get("/")
 def root():
